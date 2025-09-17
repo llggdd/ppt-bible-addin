@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bible Cite & Verify</title>
+  <!-- Office.js 런타임 로드 -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, 'Noto Sans KR', Arial, sans-serif; margin: 16px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .col { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 12px; color: #444; }
+    input[type="text"], select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 8px; }
+    button { padding: 8px 12px; border-radius: 10px; border: 1px solid #ddd; background: #f7f7f7; cursor: pointer; }
+    button.primary { background: #005fb8; color: white; border-color: #005fb8; }
+    button.warn { background: #d83b01; color: white; border-color: #d83b01; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .card { border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    .muted { color: #666; font-size: 12px; }
+    .log { white-space: pre-wrap; background: #fafafa; border: 1px dashed #ddd; padding: 8px; border-radius: 8px; height: 160px; overflow: auto; }
+    .inline { display:inline-flex; gap:6px; align-items:center }
+  </style>
+</head>
+<body>
+  <h2 style="margin-top:0">Bible Cite & Verify</h2>
+
+  <!-- (1) booklist 로드 -->
+  <div class="card">
+    <div class="row">
+      <div class="col" style="flex:1">
+        <label>booklist.json 로드 (권 이름/약칭 별칭)</label>
+        <input id="fileBooklist" type="file" accept=".json" />
+      </div>
+      <div class="col" style="width:200px; align-self:flex-end">
+        <button id="btnClearBooklist">booklist 초기화</button>
+      </div>
+    </div>
+    <div class="muted">booklist를 로드하면 “창/창세기/Gen/Genesis/요/요한복음/John…” 등 다양한 표기가 모두 인식됩니다. :contentReference[oaicite:3]{index=3}</div>
+  </div>
+
+  <!-- (2) 번역본 로드/선택 -->
+  <div class="card">
+    <div class="row">
+      <div class="col" style="flex:1">
+        <label>번역본(JSON) 로드 (여러 개 가능)</label>
+        <input id="fileBible" type="file" accept=".json" />
+      </div>
+      <div class="col" style="width:240px">
+        <label>현재 번역본</label>
+        <select id="translationSelect"></select>
+      </div>
+      <div class="col" style="width:160px; align-self:flex-end">
+        <button id="btnForget" title="로컬 저장된 번역본 전체 제거">번역본 초기화</button>
+      </div>
+    </div>
+    <div class="muted">너의 KOR(한글킹)/KJV1769 형식(`[book, chapter, verse, text]` 및 `{ "Bible": [...] }`)을 그대로 지원합니다. :contentReference[oaicite:4]{index=4} :contentReference[oaicite:5]{index=5}</div>
+  </div>
+
+  <!-- (3) 인용 삽입 -->
+  <div class="card">
+    <div class="row">
+      <div class="col" style="flex:1">
+        <label>구절 입력 (예: "요 3:16-18", "시 23:1-3", "John 3:16")</label>
+        <input id="refInput" type="text" placeholder="책이름 장:절(들)" />
+      </div>
+      <div class="col" style="width:260px">
+        <label>삽입 모드</label>
+        <select id="insertMode">
+          <option value="auto">자동: 새 텍스트 박스 2개 생성(본문/인용)</option>
+          <option value="selected">선택된 도형 두 개에 채우기(첫째=본문, 둘째=인용)</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="inline">
+        <input id="chkJoinMultiVerses" type="checkbox" checked />
+        <label for="chkJoinMultiVerses">다절 인용 시 공백으로 이어붙이기</label>
+      </div>
+      <div class="inline">
+        <input id="chkAddQuotes" type="checkbox" />
+        <label for="chkAddQuotes">본문에 인용부호(“”) 추가</label>
+      </div>
+      <div class="inline">
+        <input id="chkAddPrefix" type="checkbox" checked />
+        <label for="chkAddPrefix">인용 형식: (책 장:절)</label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="btnInsert">본문+인용 삽입</button>
+    </div>
+  </div>
+
+  <!-- (4) 검증 -->
+  <div class="card">
+    <div class="row">
+      <div class="col" style="width:220px">
+        <label>검증 대상</label>
+        <select id="verifyScope">
+          <option value="slide">현재 슬라이드</option>
+          <option value="deck">전체 프레젠테이션</option>
+        </select>
+      </div>
+      <div class="col" style="width:260px">
+        <label>매칭 규칙</label>
+        <select id="matchRule">
+          <option value="substring">부분(연속) 일치 허용</option>
+          <option value="exact">정확히 일치</option>
+          <option value="ellipsis">엘립시스(…/...)는 와일드카드</option>
+        </select>
+      </div>
+      <div class="col" style="width:240px">
+        <label>정규화</label>
+        <select id="normalizeRule">
+          <option value="simple">공백·문장부호 제거, 대소문자 무시</option>
+          <option value="none">정규화 안 함</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="btnVerify">검증 실행</button>
+      <button class="warn" id="btnClearMarks">검증 마크 제거</button>
+    </div>
+    <div class="muted">본문을 일부만 써도 선택 번역본의 실제 본문에 포함되는지 검사합니다.</div>
+  </div>
+
+  <!-- (5) 로그 -->
+  <div class="card">
+    <label>로그</label>
+    <div id="log" class="log"></div>
+  </div>
+
+<script>
+/** ===================== 공통 유틸 ===================== */
+const STORAGE_TR = 'bible.translations.v1';
+const STORAGE_BL = 'bible.booklist.v1';
+const TAG_TEXT = 'BIBLE_TEXT';
+const TAG_REF  = 'BIBLE_REF';
+
+function log(msg){ const el = document.getElementById('log'); el.textContent += (msg + "\n"); el.scrollTop = el.scrollHeight; }
+function normalize(text, rule='simple'){
+  if(!text) return '';
+  if(rule==='none') return text;
+  const t = text
+    .normalize('NFKC')
+    .replace(/[\u2018\u2019\u201C\u201D]/g, '"') // 스마트 따옴표 단일화
+    .replace(/<[^>]+>/g, '')                   // 마크업 제거(KJV의 <i> 등)  :contentReference[oaicite:6]{index=6}
+    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return t;
+}
+function buildRegexFromExcerpt(excerpt){
+  const esc = excerpt.replace(/[.*+?^${}()|[\]\\]/g, r=>"\\"+r);
+  return new RegExp(esc.replace(/(\\.\\.\\.|…)/g, '.*'), 'i');
+}
+
+/** ===================== 전역 상태 ===================== */
+const state = {
+  translations: {},     // code -> { code, name, books[], aliases }
+  current: null,        // current translation code
+  booklist: null        // {1:{names[],abbrs[]}, ...}
+};
+function saveAll(){
+  localStorage.setItem(STORAGE_TR, JSON.stringify(state.translations||{}));
+  localStorage.setItem(STORAGE_BL, JSON.stringify(state.booklist||null));
+}
+function loadAll(){
+  try{ const a = localStorage.getItem(STORAGE_TR); if(a) state.translations = JSON.parse(a)||{}; }catch{}
+  try{ const b = localStorage.getItem(STORAGE_BL); if(b) state.booklist = JSON.parse(b)||null; }catch{}
+  refreshTranslationSelect();
+}
+
+/** ===================== booklist 처리 ===================== */
+function isBooklist(obj){
+  return obj && typeof obj==='object' && obj["1"] && (obj["1"].KOR || obj["1"].ENG || obj["1"].KJV);
+}
+function normalizeBooklist(obj){
+  const map = {};
+  for(let i=1;i<=66;i++){
+    const k = String(i); const it = obj[k]; if(!it) continue;
+    const names = [it.KOR, it.KKJV, it.KJV, it.ENG].filter(Boolean);
+    const abbrs = [it.KOR_IDX, it.KKJV_IDX, it.ENG_IDX].filter(Boolean);
+    map[i] = { names, abbrs };
+  }
+  return map;
+}
+function buildAliasesFromBooklist(booklist){
+  const m = {};
+  for(let i=1;i<=66;i++){
+    const it = booklist[i]; if(!it) continue;
+    const keys = [...it.names, ...it.abbrs];
+    for(const key of keys){ if(!key) continue; m[normalize(key,'simple')] = i-1; } // 0-based
+  }
+  return m;
+}
+
+/** ===================== 번역본 스키마 인식 ===================== */
+// 공용: books = [{name, abbr, chapters:[[v1,v2,...], ...]}, ...]
+// 스키마 A: { meta:{code,name}, books:[{ name, abbr?, chapters:[ [..], ...] }, ...] }
+function detectSchemaA(json){
+  if(!(json && Array.isArray(json.books))) return null;
+  const code = (json.meta && (json.meta.code||json.meta.translation||json.meta.abbr)) || json.code || 'TR';
+  const name = (json.meta && (json.meta.name||json.meta.translationName)) || json.name || code;
+  const books = json.books.map((b,i)=>({
+    name: b.name || b.book || `Book${i+1}`,
+    abbr: b.abbr || b.short || null,
+    chapters: Array.isArray(b.chapters) ? b.chapters : [],
+  }));
+  return { code, name, books };
+}
+// 스키마 B: { [bookName]: { [chapter1based]: { [verse1based]: text } } }
+function detectSchemaB(json){
+  if(!(json && typeof json==='object' && !Array.isArray(json))) return null;
+  const entries = Object.entries(json);
+  if(entries.length===0 || typeof entries[0][1] !== 'object') return null;
+  const books = entries.map(([bookName, val])=>{
+    const chaptersArr=[];
+    for(const [ch, versesObj] of Object.entries(val)){
+      const vArr=[]; const sorted = Object.entries(versesObj).sort((a,b)=>Number(a[0])-Number(b[0]));
+      for(const [v, t] of sorted){ vArr.push(String(t)); }
+      chaptersArr.push(vArr);
+    }
+    return { name: bookName, abbr: null, chapters: chaptersArr };
+  });
+  return { code: 'TR', name: 'Imported JSON', books };
+}
+// [필수] 스키마 C: 배열(혹은 json.Bible)에 [book, chapter, verse, text]
+function detectSchemaC(json) {
+  // 반드시 C를 우선으로 체크: json.Bible가 있으면 최우선 채택
+  const arr = Array.isArray(json) ? json
+    : (json && Array.isArray(json.Bible) ? json.Bible : null);
+  if (!(arr && Array.isArray(arr) && arr.length)) return null;
+
+  const maxBooks = 66;
+  const books = Array.from({ length: maxBooks }, () => ({ name: null, abbr: null, chapters: [] }));
+
+  for (const row of arr) {
+    if (!Array.isArray(row) || row.length < 4) continue;
+    const [b, c, v, t] = row;
+    const bi = Number(b) - 1, ci = Number(c) - 1, vi = Number(v) - 1;
+    if (!(bi >= 0 && bi < maxBooks)) continue;
+    if (!books[bi].chapters[ci]) books[bi].chapters[ci] = [];
+    books[bi].chapters[ci][vi] = String(t ?? '');
+  }
+
+  // ??여기서 "빈 권 제거(filter)" 하지 마세요. 66권을 그대로 유지해야 booklist 인덱스(0~65)와 맞습니다.
+  const code = (json.meta && (json.meta.code || json.meta.translation)) || json.code || 'TR';
+  const name = (json.meta && (json.meta.name || json.meta.translationName)) || json.name || code;
+  return { code, name, books };
+}
+function detectSchema(json) {
+  // C 먼저 시도 (너의 파일 구조가 C이므로 오인식 방지)  
+  const C = detectSchemaC(json); if (C) return finalizeMeta(C);
+  const A = detectSchemaA(json); if (A) return finalizeMeta(A);
+  const B = detectSchemaB(json); if (B) return finalizeMeta(B);
+  return null;
+}
+
+function finalizeMeta(meta) {
+  // booklist가 있으면 이름/약칭/별칭 보강, 없으면 최소 별칭 생성
+  let aliases;
+  if (state.booklist) {
+    aliases = buildAliasesFromBooklist(state.booklist);
+    meta.books.forEach((b, i) => {
+      const bl = state.booklist[i + 1];
+      if (bl) {
+        if (!b.name && bl.names[0]) b.name = bl.names[0];
+        if (!b.abbr && bl.abbrs[0]) b.abbr = bl.abbrs[0];
+      }
+      if (!b.name) b.name = `Book${i + 1}`; // 최종 안전장치
+    });
+  } else {
+    aliases = buildAliases(meta.books);
+    meta.books.forEach((b, i) => { if (!b.name) b.name = `Book${i + 1}`; });
+  }
+  return { ...meta, aliases };
+}
+
+// booklist 미사용 시 최소 별칭(영/한 흔한 표기 몇 개)
+function buildAliases(books){
+  const map={};
+  books.forEach((b,idx)=>{
+    const keys=[b.name, b.abbr].filter(Boolean);
+    keys.forEach(k=>{ map[normalize(k,'simple')] = idx; });
+    const extra = {
+      'genesis':'창세기','gen':'창세기','exodus':'출애굽기','exo':'출애굽기',
+      'ps':'시편','psalm':'시편','psalms':'시편',
+      'mt':'마태복음','mk':'마가복음','mrk':'마가복음','lk':'누가복음','luke':'누가복음','jn':'요한복음','john':'요한복음'
+    };
+    const nname = normalize(b.name,'simple');
+    for(const [k,val] of Object.entries(extra)){
+      if(val && normalize(val,'simple')===nname) map[k]=idx;
+    }
+  });
+  return map;
+}
+function resolveBookIndex(bookRaw){
+  const tr = state.translations[state.current]; if(!tr) throw new Error('번역본이 선택되지 않았습니다.');
+  const key = normalize(bookRaw,'simple');
+  if(tr.aliases[key]!==undefined) return tr.aliases[key];
+  const cand = Object.entries(tr.aliases).find(([k])=>k.startsWith(key)||key.startsWith(k));
+  if(cand) return cand[1];
+  throw new Error(`책 이름을 찾을 수 없습니다: ${bookRaw}`);
+}
+
+/** ===================== 본문 조회/표기 ===================== */
+function parseReference(refText){
+  const m = refText.trim().match(/^(.+?)\s+(\d+)\s*:\s*([\d,\-\s]+)$/u);
+  if(!m) throw new Error('인식 불가: "책이름 장:절" 형식을 사용하세요.');
+  const book = m[1].trim();
+  const chap = parseInt(m[2],10);
+  const segments = m[3].trim().split(',').map(s=>s.trim()).filter(Boolean);
+  const verses=[];
+  for(const seg of segments){
+    if(seg.includes('-')){ const [a,b] = seg.split('-').map(x=>parseInt(x,10)); if(!(a>=1 && b>=a)) throw new Error('절 범위 오류'); for(let v=a; v<=b; v++) verses.push(v); }
+    else { const v = parseInt(seg,10); if(!(v>=1)) throw new Error('절 번호 오류'); verses.push(v); }
+  }
+  return { book, chap, verses };
+}
+function getVersesText(parsed, joinMulti=true){
+  const tr = state.translations[state.current]; if(!tr) throw new Error('번역본이 선택되지 않았습니다.');
+  const bIdx = resolveBookIndex(parsed.book);
+  const book = tr.books[bIdx];
+  const ch = book.chapters[parsed.chap-1];
+  if(!ch) throw new Error(`장 없음: ${book.name} ${parsed.chap}`);
+  const parts=[];
+  for(const v of parsed.verses){ const t = ch[v-1]; if(t===undefined) throw new Error(`절 없음: ${book.name} ${parsed.chap}:${v}`); parts.push(String(t)); }
+  return joinMulti ? parts.join(' ') : parts.join('\n');
+}
+function formatCitation(parsed){
+  const tr = state.translations[state.current]; const i = resolveBookIndex(parsed.book); const book = tr.books[i];
+  const vs = parsed.verses.slice().sort((a,b)=>a-b);
+  const ranges=[]; let s=vs[0], p=vs[0];
+  for(let k=1;k<vs.length;k++){ if(vs[k]===p+1){ p=vs[k]; continue; } ranges.push(s===p? String(s):`${s}-${p}`); s=p=vs[k]; }
+  ranges.push(s===p? String(s):`${s}-${p}`);
+  return `${book.name} ${parsed.chap}:${ranges.join(',')}`;
+}
+
+/** ===================== PowerPoint 조작 ===================== */
+async function ensure(){ await Office.onReady(); }
+async function getSelectedShapes(context){
+  const sel = context.presentation.getSelectedShapes(); sel.load('items'); await context.sync(); return sel.items;
+}
+async function insertAuto(text, citation, {addQuotes=false}={}){
+  return PowerPoint.run(async (context)=>{
+    const slide = context.presentation.slides.getItemAt(0);
+    const shapes = slide.shapes;
+    const body = addQuotes ? `“${text}”` : text;
+    const box1 = shapes.addTextBox(body, { left: 100, top: 100, width: 600, height: 120 });
+    const box2 = shapes.addTextBox(`(${citation})`, { left: 100, top: 230, width: 600, height: 60 });
+    box1.textFrame.textRange.font.size = 20; box2.textFrame.textRange.font.size = 14;
+    const payload = JSON.stringify({ ref:citation, tr: state.current, norm: normalize(text) });
+    box1.tags.add(TAG_TEXT, payload); box2.tags.add(TAG_REF, payload);
+    await context.sync(); log('삽입 완료: 텍스트 상자 2개 생성');
+  });
+}
+async function insertIntoSelected(text, citation, {addQuotes=false}={}){
+  return PowerPoint.run(async (context)=>{
+    const shapes = await getSelectedShapes(context);
+    if(shapes.length<2) throw new Error('두 개의 도형을 선택하세요. 첫째=본문, 둘째=인용');
+    const [s1,s2] = shapes; s1.load('textFrame'); s2.load('textFrame'); await context.sync();
+    if(!s1.textFrame || !s2.textFrame) throw new Error('선택 도형 중 텍스트 프레임이 없습니다.');
+    s1.textFrame.textRange.text = addQuotes ? `“${text}”` : text;
+    s2.textFrame.textRange.text = `(${citation})`;
+    const payload = JSON.stringify({ ref:citation, tr: state.current, norm: normalize(text) });
+    s1.tags.add(TAG_TEXT, payload); s2.tags.add(TAG_REF, payload);
+    await context.sync(); log('삽입 완료: 선택 도형에 채움');
+  });
+}
+async function clearValidationMarks(){
+  return PowerPoint.run(async (context)=>{
+    const pres = context.presentation; pres.load('slides'); await context.sync();
+    for(let i=0;i<pres.slides.items.length;i++){
+      const slide = pres.slides.items[i]; slide.load('shapes'); await context.sync();
+      for(const sh of slide.shapes.items){
+        try{
+          sh.load('lineFormat,tags'); await context.sync();
+          sh.lineFormat.weight = 0.75; sh.lineFormat.color = '#000000'; sh.lineFormat.visible = false;
+          const errTag = sh.tags.getItemOrNullObject('BIBLE_ERROR'); errTag.load('key'); await context.sync();
+          if(!errTag.isNullObject) errTag.delete();
+        }catch{}
+      }
+    }
+    await context.sync();
+    log('검증 마크 제거 완료');
+  });
+}
+function nearestTextShape(shapes, refShape){
+  const list=[]; const rx = refShape.left + (refShape.width||0)/2; const ry = refShape.top + (refShape.height||0)/2;
+  for(const s of shapes){
+    if(!s.textFrame || s.id===refShape.id) continue;
+    const cx = (s.left||0)+(s.width||0)/2; const cy = (s.top||0)+(s.height||0)/2;
+    list.push([Math.hypot(cx-rx, cy-ry), s]);
+  }
+  list.sort((a,b)=>a[0]-b[0]); return list.length? list[0][1]: null;
+}
+async function verify(scope, matchRule, normalizeRule){
+  const tr = state.translations[state.current]; if(!tr) throw new Error('번역본을 먼저 선택하세요.');
+  const report=[];
+  await PowerPoint.run(async (context)=>{
+    const pres = context.presentation; pres.load('slides'); await context.sync();
+    const slideIndexes = (scope==='deck') ? [...Array(pres.slides.items.length).keys()] : [0];
+    for(const idx of slideIndexes){
+      const slide = pres.slides.getItemAt(idx); slide.load('shapes'); await context.sync();
+      for(const sh of slide.shapes.items){ sh.load('id,name,textFrame,tags,left,top,width,height'); }
+      await context.sync();
+
+      // 태그 우선 검증
+      for(const sh of slide.shapes.items){
+        if(!sh.textFrame) continue;
+        const t1 = sh.tags.getItemOrNullObject(TAG_TEXT); t1.load('value');
+        const t2 = sh.tags.getItemOrNullObject(TAG_REF);  t2.load('value');
+      }
+      await context.sync();
+
+      for(const sh of slide.shapes.items){
+        if(!sh.textFrame) continue;
+        let payload=null;
+        const t1 = sh.tags.getItemOrNullObject(TAG_TEXT);
+        const t2 = sh.tags.getItemOrNullObject(TAG_REF);
+        if(t1 && !t1.isNullObject && t1.value) payload = JSON.parse(t1.value);
+        else if(t2 && !t2.isNullObject && t2.value) payload = JSON.parse(t2.value);
+
+        if(payload){
+          const parsed = parseReference(payload.ref);
+          const expectRaw = getVersesText(parsed, true);
+          const expect = normalize(expectRaw, normalizeRule);
+          const actualRaw = sh.textFrame.textRange.text||'';
+          const actual = normalize(actualRaw, normalizeRule);
+          let ok=false;
+          if(matchRule==='exact') ok = (actual===expect);
+          else if(matchRule==='substring') ok = expect.includes(actual) || actual.includes(expect);
+          else { const rx = buildRegexFromExcerpt(actualRaw); ok = rx.test(expectRaw); }
+          if(!ok){
+            try{ sh.lineFormat.visible=true; sh.lineFormat.color='#d83b01'; sh.lineFormat.weight=2.25; }catch{}
+            try{ sh.tags.add('BIBLE_ERROR', JSON.stringify({reason:'mismatch', ref: payload.ref})); }catch{}
+            report.push({ slide: idx+1, shape: sh.name, ref: payload.ref, expect: expectRaw.slice(0,160), actual: actualRaw.slice(0,160) });
+          }
+        } else {
+          // 인용(책 장:절) 패턴만 있는 상자 → 가장 가까운 텍스트 상자와 대조
+          const txt = sh.textFrame.textRange.text||'';
+          const m = txt.match(/([\p{L}\s\.]+)\s+(\d+)\s*:\s*(\d+(?:[-–]\d+)?(?:\s*,\s*\d+(?:[-–]\d+)?)*)/u);
+          if(m){
+            try{
+              const refStr = `${m[1].trim()} ${m[2]}:${m[3].replace('–','-')}`;
+              const parsed = parseReference(refStr);
+              const expectRaw = getVersesText(parsed, true);
+              const cand = nearestTextShape(slide.shapes.items, sh);
+              if(cand){
+                const actualRaw = cand.textFrame.textRange.text||'';
+                const expect = normalize(expectRaw, normalizeRule);
+                const actual = normalize(actualRaw, normalizeRule);
+                let ok=false;
+                if(matchRule==='exact') ok = (actual===expect);
+                else if(matchRule==='substring') ok = expect.includes(actual) || actual.includes(expect);
+                else { const rx = buildRegexFromExcerpt(actualRaw); ok = rx.test(expectRaw); }
+                if(!ok){
+                  try{ cand.lineFormat.visible=true; cand.lineFormat.color='#d83b01'; cand.lineFormat.weight=2.25; }catch{}
+                  try{ cand.tags.add('BIBLE_ERROR', JSON.stringify({reason:'mismatch', ref: refStr})); }catch{}
+                  report.push({ slide: idx+1, shape: cand.name, ref: refStr, expect: expectRaw.slice(0,160), actual: actualRaw.slice(0,160) });
+                }
+              }
+            }catch{}
+          }
+        }
+      }
+    }
+    await context.sync();
+  });
+  if(report.length===0) log('✅ 검증 통과: 문제 없음');
+  else { log('❌ 검증 실패 항목:'); report.forEach(r=> log(` - Slide ${r.slide} / ${r.shape}: ${r.ref}\n   기대: ${r.expect}\n   실제: ${r.actual}`)); }
+}
+
+/** ===================== UI 바인딩 ===================== */
+function refreshTranslationSelect(){
+  const sel = document.getElementById('translationSelect');
+  sel.innerHTML = '';
+  const codes = Object.keys(state.translations);
+  if(codes.length===0){ sel.innerHTML = '<option value="">(없음)</option>'; state.current=null; return; }
+  for(const code of codes){
+    const t = state.translations[code];
+    const opt = document.createElement('option');
+    opt.value = code; opt.textContent = `${t.name || code} (${code})`;
+    sel.appendChild(opt);
+  }
+  if(!state.current || !state.translations[state.current]) state.current = codes[0];
+  sel.value = state.current;
+}
+function setCurrentTranslation(code){ state.current = code; }
+
+async function onLoadBooklist(file){
+  const text = await file.text(); const json = JSON.parse(text);
+  if(!isBooklist(json)){ log('⚠️ booklist.json 형식이 아닙니다.'); return; }
+  state.booklist = normalizeBooklist(json);
+  saveAll();
+  log('booklist 등록 완료(권 이름/약칭 별칭 활성화).');
+}
+function guessCodeFromFilename(filename) {
+  if (!filename) return null;
+  const base = filename.split(/[\\/]/).pop().replace(/\.json$/i, '');
+  return base.toUpperCase().replace(/[^A-Z0-9_\-]/g, '').slice(0, 12) || null;
+}
+
+async function onLoadBible(file) {
+  const text = await file.text(); const json = JSON.parse(text);
+  const meta = detectSchema(json);
+  if (!meta) { log('?? 인식 가능한 성경 스키마가 아닙니다.'); return; }
+
+  // 파일명에서 코드 추정 → 충돌 방지
+  const codeFromName = guessCodeFromFilename(file?.name);
+  if (codeFromName) meta.code = codeFromName;
+
+  // booklist가 있으면 별칭/이름 보강(재확인)
+  if (state.booklist) {
+    meta.aliases = buildAliasesFromBooklist(state.booklist);
+    meta.books.forEach((b, i) => {
+      const bl = state.booklist[i + 1];
+      if (bl) {
+        if (!b.abbr && bl.abbrs[0]) b.abbr = bl.abbrs[0];
+        if (!b.name && bl.names[0]) b.name = bl.names[0];
+      }
+      if (!b.name) b.name = `Book${i + 1}`;
+    });
+  }
+
+  // 등록 & 현재 선택
+  state.translations[meta.code] = meta;
+  state.current = meta.code;
+  saveAll();
+  refreshTranslationSelect();
+  log(`번역본 등록: ${meta.name} (${meta.code}) ? ${meta.books.length}권`);
+}
+
+
+document.getElementById('fileBooklist').addEventListener('change', e=>{
+  const f = e.target.files?.[0]; if(f) onLoadBooklist(f).catch(err=>log('❌ '+err.message));
+});
+document.getElementById('btnClearBooklist').addEventListener('click', ()=>{
+  state.booklist=null; saveAll(); log('booklist 초기화 완료.');
+});
+document.getElementById('fileBible').addEventListener('change', e=>{
+  const f = e.target.files?.[0]; if(f) onLoadBible(f).catch(err=>log('❌ '+err.message));
+});
+document.getElementById('translationSelect').addEventListener('change', e=>{ setCurrentTranslation(e.target.value); log('현재 번역본: '+e.target.value); });
+document.getElementById('btnForget').addEventListener('click', ()=>{ state.translations={}; state.current=null; saveAll(); refreshTranslationSelect(); log('모든 번역본 초기화 완료.'); });
+
+document.getElementById('btnInsert').addEventListener('click', async ()=>{
+  try{
+    await ensure();
+    if(!state.current) throw new Error('번역본을 먼저 선택/로드하세요.');
+    const ref = document.getElementById('refInput').value.trim(); if(!ref) throw new Error('구절을 입력하세요.');
+    const parsed = parseReference(ref);
+    const joinMulti = document.getElementById('chkJoinMultiVerses').checked;
+    const text = getVersesText(parsed, joinMulti);
+    const citation = formatCitation(parsed); // 접두 괄호는 텍스트 상자에서 처리
+    const addQuotes = document.getElementById('chkAddQuotes').checked;
+    const mode = document.getElementById('insertMode').value;
+    if(mode==='auto') await insertAuto(text, citation, { addQuotes });
+    else await insertIntoSelected(text, citation, { addQuotes });
+  }catch(e){ log('❌ '+(e.message||e)); }
+});
+document.getElementById('btnVerify').addEventListener('click', async ()=>{
+  try{
+    await ensure();
+    await verify(
+      document.getElementById('verifyScope').value,
+      document.getElementById('matchRule').value,
+      document.getElementById('normalizeRule').value
+    );
+  }catch(e){ log('❌ '+(e.message||e)); }
+});
+document.getElementById('btnClearMarks').addEventListener('click', async ()=>{
+  try{ await ensure(); await clearValidationMarks(); }catch(e){ log('❌ '+(e.message||e)); }
+});
+
+// 초기화
+loadAll();
+ensure().then(()=> log('Add-in ready. 먼저 booklist, 그 다음 번역본 JSON을 로드하세요.'));
+</script>
+</body>
+</html>

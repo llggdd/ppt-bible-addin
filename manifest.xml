@@ -16,7 +16,7 @@
     <Host Name="Presentation"/>
   </Hosts>
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://llggdd.github.io/ppt-bible-addin/taskpane.html"/>
+    <SourceLocation DefaultValue="https://llggdd.github.io/ppt-bible-addin/src/taskpane/taskpane.html"/>
   </DefaultSettings>
   <Requirements>
     <Sets DefaultMinVersion="1.6">
@@ -73,8 +73,8 @@
       </bt:Images>
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://go.microsoft.com/fwlink/?LinkId=276812"/>
-        <bt:Url id="Commands.Url" DefaultValue="https://llggdd.github.io/ppt-bible-addin/commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://llggdd.github.io/ppt-bible-addin/taskpane.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://llggdd.github.io/ppt-bible-addin/commands/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://llggdd.github.io/ppt-bible-addin/src/taskpane/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Get started with your sample add-in!"/>
